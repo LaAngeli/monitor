@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # YouTube Comment Monitor
 
 ## Descriere
@@ -31,3 +32,6 @@ Aplicație pentru monitorizarea comentariilor și like-urilor de pe videoclipuri
 - Datele sunt salvate în fișierul `comment_evolution_data.csv`
 - Aplicația verifică modificări la fiecare 60 de secunde
 - Puteți opri monitorizarea oricând apăsând butonul "Oprește Monitorizarea" 
+=======
+# monitor
+>>>>>>> 8a65e235ec2f2f527179d1d71e13d33709c7a9e7
