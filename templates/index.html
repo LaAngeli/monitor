@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Comment Monitor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+        }
+        .verificare {
+            color: green;
+            font-weight: bold;
+        }
+        .likes {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">YouTube Comment Monitor</h1>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                Configurare Monitorizare
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="videoId" class="form-label">Video ID</label>
+                    <input type="text" class="form-control" id="videoId" placeholder="Introduceți ID-ul videoclipului">
+                </div>
+                <div class="mb-3">
+                    <label for="apiKey" class="form-label">API Key</label>
+                    <input type="password" class="form-control" id="apiKey" placeholder="Introduceți API Key">
+                </div>
+                <button id="startButton" class="btn btn-primary">Start Monitorizare</button>
+                <button id="stopButton" class="btn btn-danger" disabled>Stop Monitorizare</button>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                Statistici
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Status:</strong> <span id="status">Neactiv</span></p>
+                        <p><strong>Timp de rulare:</strong> <span id="runtime">00:00:00</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Comentarii monitorizate:</strong> <span id="commentsCount">0</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Log-uri</span>
+                <div class="input-group" style="width: 300px;">
+                    <input type="text" class="form-control" id="searchInput" placeholder="Caută în log-uri">
+                    <button class="btn btn-outline-secondary" type="button" id="searchButton">Caută</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="logContainer" class="log-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let startTime = null;
+        let runtimeInterval = null;
+
+        // Elemente DOM
+        const videoIdInput = document.getElementById('videoId');
+        const apiKeyInput = document.getElementById('apiKey');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const statusElement = document.getElementById('status');
+        const runtimeElement = document.getElementById('runtime');
+        const commentsCountElement = document.getElementById('commentsCount');
+        const logContainer = document.getElementById('logContainer');
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+
+        // Funcții utilitare
+        function formatTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function updateRuntime() {
+            if (startTime) {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                runtimeElement.textContent = formatTime(elapsed);
+            }
+        }
+
+        function addLogMessage(message) {
+            const logElement = document.createElement('div');
+            
+            if (message.includes('Verificare completă')) {
+                logElement.className = 'verificare';
+            } else if (message.includes('like-uri:')) {
+                const parts = message.split('like-uri:');
+                logElement.innerHTML = `${parts[0]}like-uri:<span class="likes">${parts[1]}</span>`;
+            } else {
+                logElement.textContent = message;
+            }
+            
+            logContainer.appendChild(logElement);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Event Listeners
+        startButton.addEventListener('click', async () => {
+            const videoId = videoIdInput.value.trim();
+            const apiKey = apiKeyInput.value.trim();
+
+            if (!videoId || !apiKey) {
+                alert('Vă rugăm să introduceți Video ID și API Key!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/start_monitoring', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ video_id: videoId, api_key: apiKey }),
+                });
+
+                if (response.ok) {
+                    startTime = Date.now();
+                    runtimeInterval = setInterval(updateRuntime, 1000);
+                    statusElement.textContent = 'Activ';
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                    videoIdInput.disabled = true;
+                    apiKeyInput.disabled = true;
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Eroare la pornirea monitorizării');
+                }
+            } catch (error) {
+                alert('Eroare la comunicarea cu serverul');
+            }
+        });
+
+        stopButton.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/stop_monitoring', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (response.ok) {
+                    clearInterval(runtimeInterval);
+                    statusElement.textContent = 'Neactiv';
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                    videoIdInput.disabled = false;
+                    apiKeyInput.disabled = false;
+                }
+            } catch (error) {
+                alert('Eroare la oprirea monitorizării');
+            }
+        });
+
+        searchButton.addEventListener('click', () => {
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            if (searchTerm) {
+                const logs = logContainer.getElementsByTagName('div');
+                Array.from(logs).forEach(log => {
+                    log.style.display = log.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
+                });
+            }
+        });
+
+        // Socket.IO Events
+        socket.on('log_update', (data) => {
+            addLogMessage(data.message);
+        });
+
+        // Inițializare
+        document.addEventListener('DOMContentLoaded', () => {
+            // Verificăm statusul inițial
+            fetch('/api/get_stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.is_monitoring) {
+                        startTime = Date.now();
+                        runtimeInterval = setInterval(updateRuntime, 1000);
+                        statusElement.textContent = 'Activ';
+                        startButton.disabled = true;
+                        stopButton.disabled = false;
+                        videoIdInput.disabled = true;
+                        apiKeyInput.disabled = true;
+                    }
+                    commentsCountElement.textContent = data.monitored_comments_count;
+                });
+
+            // Încărcăm log-urile existente
+            fetch('/api/get_logs')
+                .then(response => response.json())
+                .then(data => {
+                    data.logs.forEach(log => addLogMessage(log));
+                });
+        });
+    </script>
+</body>
+</html> 
