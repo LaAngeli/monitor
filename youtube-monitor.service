@@ -1,0 +1,12 @@
+[Unit]
+Description=YouTube Comment Monitor
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/var/www/youtube-monitor
+Environment="PATH=/var/www/youtube-monitor/venv/bin"
+ExecStart=/var/www/youtube-monitor/venv/bin/gunicorn --workers 3 --bind unix:youtube-monitor.sock -m 007 app:app
+
+[Install]
+WantedBy=multi-user.target 
